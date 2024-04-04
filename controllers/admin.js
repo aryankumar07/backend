@@ -1,24 +1,54 @@
 const Product = require('../models/product');
 
+const { validationResult } = require('express-validator');
+
 exports.getAddProduct = (req, res, next) => {
+  if(!req.session.isLoggedin){
+    return res.redirect('/login');
+  }
   res.render('admin/edit-product', {
     pageTitle: 'Add Product',
     path: '/admin/add-product',
     editing: false,
-    isAuth : req.isLoggedIn,
+    isAuth : req.user,
   });
 };
 
 exports.postAddProduct = (req, res, next) => {
   const title = req.body.title;
-  const imageUrl = req.body.imageUrl;
+  const imageUrl = req.file;
   const price = req.body.price;
   const description = req.body.description;
+  console.log(imageUrl);
+  const error = validationResult(req);
+
+  if(!imageUrl){
+    console.log('invalid imageurl');
+    return res.render('admin/edit-product', {
+      pageTitle: 'Add Product',
+      path: '/admin/add-product',
+      editing: false,
+      isAuth : req.user,
+    });
+  }
+
+  if(!error.isEmpty()){
+    console.log('an error occured');
+    return res.render('admin/edit-product', {
+      pageTitle: 'Add Product',
+      path: '/admin/add-product',
+      editing: false,
+      isAuth : req.user,
+    });
+  }
+
+  const image = imageUrl.path;
+
   const product = new Product({
     title: title,
     price: price,
     description: description,
-    imageUrl: imageUrl,
+    imageUrl: image,
     userId: req.user
   });
   product
@@ -26,10 +56,13 @@ exports.postAddProduct = (req, res, next) => {
     .then(result => {
       // console.log(result);
       console.log('Created Product');
-      res.redirect('/admin/products');
+      return res.redirect('/admin/products');
     })
     .catch(err => {
-      console.log(err);
+      // res.redirect('/500');
+      const error = new Error(err);
+      error.httpStatusCode = 500;
+      return next(error);
     });
 };
 
@@ -49,17 +82,21 @@ exports.getEditProduct = (req, res, next) => {
         path: '/admin/edit-product',
         editing: editMode,
         product: product,
-        isAuth : req.isLoggedIn
+        isAuth : req.user,
       });
     })
-    .catch(err => console.log(err));
+    .catch(err => {
+      const error = new Error(err);
+      error.httpStatusCode = 500;
+      return next(error);
+    });
 };
 
 exports.postEditProduct = (req, res, next) => {
   const prodId = req.body.productId;
   const updatedTitle = req.body.title;
   const updatedPrice = req.body.price;
-  const updatedImageUrl = req.body.imageUrl;
+  const image = req.file;
   const updatedDesc = req.body.description;
 
   Product.findById(prodId)
@@ -67,7 +104,9 @@ exports.postEditProduct = (req, res, next) => {
       product.title = updatedTitle;
       product.price = updatedPrice;
       product.description = updatedDesc;
-      product.imageUrl = updatedImageUrl;
+      if(image){
+        product.imageUrl = image.path;
+      }
       return product.save();
     })
     .then(result => {
@@ -87,7 +126,7 @@ exports.getProducts = (req, res, next) => {
         prods: products,
         pageTitle: 'Admin Products',
         path: '/admin/products',
-        isAuth : req.isLoggedIn,
+        isAuth : req.user,
       });
     })
     .catch(err => console.log(err));
